@@ -20,5 +20,8 @@ pages: 5  # 默认为 3
 delay_min: 0.5  # 最小延迟时间，默认为 0.5
 delay_max: 1.5  # 最大延迟时间，默认为 1.5
 
+# 浏览器模式设置
+use_browser: false  # 是否使用浏览器模式，默认为 false
+
 # 输出文件设置
 output: "seo_analysis_results.xlsx"  # 默认为 "seo_analysis_results.xlsx" 

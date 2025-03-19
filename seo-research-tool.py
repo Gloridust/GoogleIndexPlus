@@ -10,6 +10,11 @@ import json
 import yaml
 import os
 from fake_useragent import UserAgent
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import platform
 
 # 设置日志
 logging.basicConfig(
@@ -23,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class SEOResearchTool:
-    def __init__(self, target_domain, delay_min=0.5, delay_max=1.5, region='com'):
+    def __init__(self, target_domain, delay_min=0.5, delay_max=1.5, region='com', use_browser=False):
         """
         初始化SEO研究工具
         
@@ -32,6 +37,7 @@ class SEOResearchTool:
             delay_min (int): 请求之间的最小延迟(秒)
             delay_max (int): 请求之间的最大延迟(秒)
             region (str): Google搜索的区域(例如: 'com', 'com.hk', 'co.jp')
+            use_browser (bool): 是否使用浏览器模式
         """
         self.target_domain = target_domain
         self.delay_min = delay_min
@@ -39,17 +45,66 @@ class SEOResearchTool:
         self.region = region
         self.ua = UserAgent()
         self.results = []
+        self.use_browser = use_browser
+        self.driver = None
         
+        if self.use_browser:
+            self._init_browser()
+    
+    def _init_browser(self):
+        """初始化浏览器"""
+        try:
+            options = uc.ChromeOptions()
+            options.add_argument('--lang=zh-CN')
+            options.add_argument(f'--user-agent={self.ua.random}')
+            
+            # 根据操作系统设置不同的窗口大小
+            if platform.system() == 'Darwin':  # macOS
+                options.add_argument('--window-size=1280,800')
+            else:
+                options.add_argument('--window-size=1920,1080')
+            
+            self.driver = uc.Chrome(options=options)
+            logger.info("浏览器初始化成功")
+        except Exception as e:
+            logger.error(f"浏览器初始化失败: {str(e)}")
+            self.use_browser = False
+    
     def get_random_headers(self):
         """生成随机请求头以模拟不同浏览器"""
+        ua = self.ua.random
         return {
-            'User-Agent': self.ua.random,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'sec-ch-ua': '"Chromium";v="112", "Google Chrome";v="112", "Not:A-Brand";v="99"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'Referer': 'https://www.google.com/',
+            'DNT': '1'
         }
     
+    def _get_page_with_browser(self, url):
+        """使用浏览器获取页面内容"""
+        try:
+            self.driver.get(url)
+            # 等待搜索结果加载
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="g"]'))
+            )
+            return self.driver.page_source
+        except Exception as e:
+            logger.error(f"浏览器获取页面失败: {str(e)}")
+            return None
+
     def search_keyword(self, keyword, search_engine="google", num_pages=8):
         """
         搜索关键词并分析结果
@@ -88,13 +143,19 @@ class SEOResearchTool:
             
             try:
                 logger.info(f"请求页面 {page}: {search_url}")
-                response = requests.get(search_url, headers=self.get_random_headers(), timeout=10)
                 
-                if response.status_code != 200:
-                    logger.warning(f"请求失败，状态码: {response.status_code}")
-                    continue
+                if self.use_browser:
+                    html_content = self._get_page_with_browser(search_url)
+                    if not html_content:
+                        continue
+                else:
+                    response = requests.get(search_url, headers=self.get_random_headers(), timeout=10)
+                    if response.status_code != 200:
+                        logger.warning(f"请求失败，状态码: {response.status_code}")
+                        continue
+                    html_content = response.text
                 
-                soup = BeautifulSoup(response.text, 'html.parser')
+                soup = BeautifulSoup(html_content, 'html.parser')
                 
                 # 解析搜索结果
                 if search_engine == "google":
@@ -103,6 +164,13 @@ class SEOResearchTool:
                     if not search_results:
                         # 备用选择器
                         search_results = soup.select('div[data-hveid]')
+                        if not search_results:
+                            # 第二备用选择器
+                            search_results = soup.select('div.MjjYud')
+                    
+                    if not search_results:
+                        logger.warning(f"页面 {page} 未找到搜索结果")
+                        continue
                     
                     for index, result in enumerate(search_results):
                         # 提取链接和标题
@@ -187,7 +255,7 @@ class SEOResearchTool:
         
         return keyword_data
     
-    def analyze_keywords(self, keywords_list, search_engine="google", num_pages=3):
+    def analyze_keywords(self, keywords_list, search_engine="google", num_pages=10):
         """
         分析多个关键词的排名
         
@@ -263,6 +331,14 @@ class SEOResearchTool:
         
         return filename
 
+    def __del__(self):
+        """析构函数，确保浏览器正确关闭"""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+
 def load_config(config_file='config.yaml'):
     """
     从配置文件加载配置
@@ -306,31 +382,34 @@ def main():
     parser.add_argument('--keywords', '-k', type=str,
                         help='要分析的关键词，用逗号分隔 (例如 "SEO优化,网站推广,网络营销")')
     
-    parser.add_argument('--region', '-r', type=str, default='com',
-                        help='Google搜索的区域 (例如: com, com.hk, co.jp) (默认: com)')
+    parser.add_argument('--region', '-r', type=str,
+                        help='Google搜索的区域 (例如: com, com.hk, co.jp)')
     
-    parser.add_argument('--search-engine', '-s', type=str, default='google',
+    parser.add_argument('--search-engine', '-s', type=str,
                         choices=['google', 'bing'],
-                        help='使用的搜索引擎 (默认: google)')
+                        help='使用的搜索引擎')
     
-    parser.add_argument('--pages', '-p', type=int, default=3,
-                        help='要检查的搜索结果页数 (默认: 3)')
+    parser.add_argument('--pages', '-p', type=int,
+                        help='要检查的搜索结果页数')
     
-    parser.add_argument('--delay-min', type=float, default=0.5,
-                        help='请求之间的最小延迟(秒) (默认: 0.5)')
+    parser.add_argument('--delay-min', type=float,
+                        help='请求之间的最小延迟(秒)')
     
-    parser.add_argument('--delay-max', type=float, default=1.5,
-                        help='请求之间的最大延迟(秒) (默认: 1.5)')
+    parser.add_argument('--delay-max', type=float,
+                        help='请求之间的最大延迟(秒)')
     
-    parser.add_argument('--output', '-o', type=str, default='seo_analysis_results.xlsx',
-                        help='输出文件名 (默认: seo_analysis_results.xlsx)')
+    parser.add_argument('--output', '-o', type=str,
+                        help='输出文件名')
+    
+    parser.add_argument('--use-browser', '-b', action='store_true',
+                        help='使用浏览器模式进行搜索 (默认: False)')
     
     args = parser.parse_args()
     
     # 从配置文件加载配置
     config = load_config(args.config)
     
-    # 命令行参数优先于配置文件
+    # 命令行参数优先于配置文件，配置文件优先于默认值
     domain = args.domain or config.get('domain')
     keywords_str = args.keywords or config.get('keywords')
     region = args.region or config.get('region', 'com')
@@ -339,6 +418,7 @@ def main():
     delay_min = args.delay_min or config.get('delay_min', 0.5)
     delay_max = args.delay_max or config.get('delay_max', 1.5)
     output = args.output or config.get('output', 'seo_analysis_results.xlsx')
+    use_browser = args.use_browser or config.get('use_browser', False)
     
     # 参数验证
     if not domain:
@@ -367,7 +447,7 @@ def main():
     logger.info(f"使用搜索引擎: {search_engine}, 区域: {region}, 检查页数: {pages}")
     
     # 创建SEO研究工具实例
-    tool = SEOResearchTool(domain, delay_min, delay_max, region)
+    tool = SEOResearchTool(domain, delay_min, delay_max, region, use_browser)
     
     # 分析关键词
     results_df = tool.analyze_keywords(keywords_list, search_engine, pages)
