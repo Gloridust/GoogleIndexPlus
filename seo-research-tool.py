@@ -105,6 +105,45 @@ class SEOResearchTool:
             logger.error(f"浏览器获取页面失败: {str(e)}")
             return None
 
+    def _simulate_user_browsing(self, url):
+        """模拟用户浏览行为"""
+        try:
+            if not self.use_browser:
+                logger.info("需要启用浏览器模式才能模拟用户浏览行为")
+                return
+
+            logger.info(f"模拟用户点击并浏览: {url}")
+            
+            # 保存当前窗口句柄
+            original_window = self.driver.current_window_handle
+            
+            # 打开新标签页
+            self.driver.execute_script(f"window.open('{url}', '_blank');")
+            
+            # 切换到新标签页
+            self.driver.switch_to.window(self.driver.window_handles[-1])
+            
+            # 模拟用户浏览行为
+            total_height = int(self.driver.execute_script("return document.body.scrollHeight"))
+            for i in range(0, total_height, 100):
+                self.driver.execute_script(f"window.scrollTo(0, {i});")
+                time.sleep(random.uniform(0.1, 0.3))
+            
+            # 在页面停留随机时间（15-30秒）
+            time.sleep(random.uniform(5, 10))
+            
+            # 关闭当前标签页并切回原标签页
+            self.driver.close()
+            self.driver.switch_to.window(original_window)
+            
+        except Exception as e:
+            logger.error(f"模拟用户浏览时出错: {str(e)}")
+            # 确保切回原始窗口
+            try:
+                self.driver.switch_to.window(original_window)
+            except:
+                pass
+
     def search_keyword(self, keyword, search_engine="google", num_pages=8):
         """
         搜索关键词并分析结果
@@ -198,6 +237,10 @@ class SEOResearchTool:
                             keyword_data['page'] = page
                             keyword_data['url'] = link
                             logger.info(f"在结果中找到目标网站: 排名 #{rank}, 页面 #{page}, URL: {link}")
+                            
+                            # 模拟用户点击和浏览行为
+                            if self.use_browser:
+                                self._simulate_user_browsing(link)
                         
                         # 收集竞争对手数据
                         if not self.target_domain in link:
