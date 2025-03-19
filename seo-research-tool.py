@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class SEOResearchTool:
-    def __init__(self, target_domain, delay_min=0, delay_max=2, region='com'):
+    def __init__(self, target_domain, delay_min=0.5, delay_max=1.5, region='com'):
         """
         初始化SEO研究工具
         
@@ -98,11 +98,15 @@ class SEOResearchTool:
                 
                 # 解析搜索结果
                 if search_engine == "google":
-                    search_results = soup.select('div.g')
+                    # 更新选择器以适应Google的新HTML结构
+                    search_results = soup.select('div[class*="g"]')
+                    if not search_results:
+                        # 备用选择器
+                        search_results = soup.select('div[data-hveid]')
                     
                     for index, result in enumerate(search_results):
                         # 提取链接和标题
-                        link_element = result.select_one('a')
+                        link_element = result.select_one('a[href]')
                         if not link_element:
                             continue
                             
@@ -178,8 +182,8 @@ class SEOResearchTool:
                 
             except Exception as e:
                 logger.error(f"处理关键词 '{keyword}' 时出错: {str(e)}")
-                # 遇到错误时增加延迟，以防被搜索引擎暂时封锁
-                time.sleep(random.uniform(self.delay_max, self.delay_max * 2))
+                # 遇到错误时的延迟时间也相应减少
+                time.sleep(random.uniform(self.delay_min, self.delay_max * 1.5))
         
         return keyword_data
     
@@ -201,8 +205,8 @@ class SEOResearchTool:
             result = self.search_keyword(keyword, search_engine, num_pages)
             self.results.append(result)
             
-            # 延迟以避免过多请求
-            delay_time = random.uniform(self.delay_min * 2, self.delay_max * 2)
+            # 减少延迟时间
+            delay_time = random.uniform(self.delay_min, self.delay_max)
             logger.info(f"分析下一个关键词前等待 {delay_time:.2f} 秒...")
             time.sleep(delay_time)
         
@@ -312,11 +316,11 @@ def main():
     parser.add_argument('--pages', '-p', type=int, default=3,
                         help='要检查的搜索结果页数 (默认: 3)')
     
-    parser.add_argument('--delay-min', type=float, default=2.0,
-                        help='请求之间的最小延迟(秒) (默认: 2.0)')
+    parser.add_argument('--delay-min', type=float, default=0.5,
+                        help='请求之间的最小延迟(秒) (默认: 0.5)')
     
-    parser.add_argument('--delay-max', type=float, default=5.0,
-                        help='请求之间的最大延迟(秒) (默认: 5.0)')
+    parser.add_argument('--delay-max', type=float, default=1.5,
+                        help='请求之间的最大延迟(秒) (默认: 1.5)')
     
     parser.add_argument('--output', '-o', type=str, default='seo_analysis_results.xlsx',
                         help='输出文件名 (默认: seo_analysis_results.xlsx)')
@@ -332,8 +336,8 @@ def main():
     region = args.region or config.get('region', 'com')
     search_engine = args.search_engine or config.get('search_engine', 'google')
     pages = args.pages or config.get('pages', 3)
-    delay_min = args.delay_min or config.get('delay_min', 2.0)
-    delay_max = args.delay_max or config.get('delay_max', 5.0)
+    delay_min = args.delay_min or config.get('delay_min', 0.5)
+    delay_max = args.delay_max or config.get('delay_max', 1.5)
     output = args.output or config.get('output', 'seo_analysis_results.xlsx')
     
     # 参数验证

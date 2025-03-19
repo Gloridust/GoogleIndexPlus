@@ -17,8 +17,8 @@ region: "com.hk"  # 例如: "com"、"com.hk"、"co.jp"，默认为 "com"
 pages: 5  # 默认为 3
 
 # 请求延迟设置（秒）
-delay_min: 2.0  # 最小延迟时间，默认为 2.0
-delay_max: 5.0  # 最大延迟时间，默认为 5.0
+delay_min: 0.5  # 最小延迟时间，默认为 0.5
+delay_max: 1.5  # 最大延迟时间，默认为 1.5
 
 # 输出文件设置
 output: "seo_analysis_results.xlsx"  # 默认为 "seo_analysis_results.xlsx" 
