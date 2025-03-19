@@ -160,3 +160,12 @@ cython_debug/
 #.idea/
 config.yaml
 config.yaml
+config.json
+*.xlsx
+*.csv
+*.json
+*.txt
+*.log
+*.html
+*.xml
+*.jsonl
