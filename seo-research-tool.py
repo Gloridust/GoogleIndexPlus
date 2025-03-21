@@ -55,16 +55,42 @@ class SEOResearchTool:
         """初始化浏览器"""
         try:
             options = uc.ChromeOptions()
-            options.add_argument('--lang=zh-CN')
+            options.add_argument('--lang=zh-CN,zh;q=0.9,en;q=0.8')
             options.add_argument(f'--user-agent={self.ua.random}')
             
-            # 根据操作系统设置不同的窗口大小
-            if platform.system() == 'Darwin':  # macOS
-                options.add_argument('--window-size=1280,800')
-            else:
-                options.add_argument('--window-size=1920,1080')
+            # 添加更多的浏览器参数
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-infobars')
+            options.add_argument('--disable-browser-side-navigation')
+            options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+            
+            # 随机设置窗口大小
+            viewports = ["1280x800", "1366x768", "1440x900", "1536x864", "1680x1050", "1920x1080"]
+            viewport = random.choice(viewports)
+            width, height = map(int, viewport.split('x'))
+            options.add_argument(f'--window-size={width},{height}')
+            
+            # 设置代理（如果需要）
+            # options.add_argument('--proxy-server=http://your-proxy-server')
             
             self.driver = uc.Chrome(options=options)
+            
+            # 执行反自动化检测的JavaScript代码
+            self.driver.execute_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['zh-CN', 'zh', 'en-US', 'en']
+                });
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+            """)
+            
             logger.info("浏览器初始化成功")
         except Exception as e:
             logger.error(f"浏览器初始化失败: {str(e)}")
@@ -73,24 +99,56 @@ class SEOResearchTool:
     def get_random_headers(self):
         """生成随机请求头以模拟不同浏览器"""
         ua = self.ua.random
-        return {
+        # 随机生成 viewport 尺寸
+        viewports = [
+            "1280x800", "1366x768", "1440x900", "1536x864", "1680x1050", "1920x1080"
+        ]
+        viewport = random.choice(viewports)
+        width, height = map(int, viewport.split('x'))
+        
+        # 随机选择平台
+        platforms = ['Windows', 'Macintosh', 'X11']
+        platform = random.choice(platforms)
+        
+        # 随机选择Chrome版本
+        chrome_versions = ['112', '113', '114', '115', '116', '117']
+        chrome_version = random.choice(chrome_versions)
+
+        headers = {
             'User-Agent': ua,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7,zh-HK;q=0.6,ja;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
             'Cache-Control': 'max-age=0',
+            'Sec-Ch-Ua': f'"Google Chrome";v="{chrome_version}", "Chromium";v="{chrome_version}", "Not=A?Brand";v="99"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': f'"{platform}"',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
-            'sec-ch-ua': '"Chromium";v="112", "Google Chrome";v="112", "Not:A-Brand";v="99"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
+            'Pragma': 'no-cache',
+            'Priority': 'u=0, i',
+            'DNT': '1',
+            'Viewport-Width': str(width),
+            'Device-Memory': f'{random.choice([4, 8, 16])}',
             'Referer': 'https://www.google.com/',
-            'DNT': '1'
+            'Cookie': f'1P_JAR=2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}-{random.randint(0,23):02d}; NID={random.randint(100000000,999999999)}; DV={"".join([str(random.randint(0,9)) for _ in range(20)])}',
         }
+        
+        # 随机添加额外的现代浏览器特征
+        if random.random() > 0.5:
+            headers.update({
+                'Sec-Ch-Ua-Full-Version': f'"{chrome_version}.0.{random.randint(1000,9999)}.{random.randint(100,999)}"',
+                'Sec-Ch-Ua-Arch': random.choice(['"x86"', '"arm"']),
+                'Sec-Ch-Ua-Model': '""',
+                'Sec-Ch-Ua-Bitness': random.choice(['"64"', '"32"']),
+                'Sec-Ch-Ua-Full-Version-List': f'"Google Chrome";v="{chrome_version}.0.{random.randint(1000,9999)}.{random.randint(100,999)}", "Chromium";v="{chrome_version}.0.{random.randint(1000,9999)}.{random.randint(100,999)}", "Not=A?Brand";v="99.0.0.0"',
+            })
+        
+        return headers
     
     def _get_page_with_browser(self, url):
         """使用浏览器获取页面内容"""
